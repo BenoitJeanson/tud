@@ -1,0 +1,223 @@
+\documentclass[11pt]{article}
+
+\usepackage{sectsty}
+\usepackage{graphicx}
+
+\usepackage{svg}
+\usepackage[off]{svg-extract}
+\svgsetup{clean=true}
+\usepackage{relsize}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+\usepackage{amsmath}
+\usepackage{amsfonts} 
+\usepackage{bm}
+
+
+\svgpath{{images}}
+
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{makecell}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\setcounter{MaxMatrixCols}{20}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+
+% Margins
+\topmargin=-0.45in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+\def\rf{\emph{Risk Factor }}
+
+\title{Project ET4350 Applied Convex Optimization
+
+Change Detection in Time Series Model}
+\author{Benoît Jeanson \\ Employee 930283 \\ \href{mailto:b.jeanson@tudelft.nl}{b.jeanson@tudelft.nl}}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+\pagebreak
+
+% Optional TOC
+% \tableofcontents
+% \pagebreak
+
+%--Paper--
+
+\section{Summary}
+    This project consists in applying optimization methods to detect the time of a change of parameters of an autoregressive time series problem. After a short reminder of the problem, a first warm-up approach is developed to get familiar with the problem, then a formulation as an optimization problem is proposed. It is then adapted to be solvable by an off-the-shelf solver and solved, and then a simple subgradient method is implemented to solve it directly from its initial formulation.
+    
+    The project was developed in \emph{Python} -- as agreed with professor... TODO -- and run on a \emph{M1-chip MacBook Air}.
+
+\section{Problem to solve}
+    A scalar autoregressive (AR) time series is modeled as follows:
+    $$y(t+3) = a(t)y(t+2) + b(t)y(t+1) + c(t)y(t) + c(t)y(t) + v(t); \quad v(t) \sim \mathcal{N}(0,0.5^2)$$
+    with the assumption that the coefficient $a(t), b(t), c(t)$ are piecewise constant that change infrequently.
+
+    The problem given in this assignment consists in identifying the parameters of the piecewise functions of the coefficients. As mentioned in the context of the assignment description, the problem concerns the detection of \emph{time(s)} of the change(s).
+
+    The provided dataset includes $T=300$ samples of $y(t)$, as well as the coefficients that were used to generate it. The parameters only change once in the sequence. See Figure\ref{fig:dataset}.
+
+    \begin{figure}[h]
+        \centering
+        \includesvg[scale=0.75, pretex=\tiny]{images/dataset.svg}
+        \caption{\label{fig:dataset} The top graphic represents the autoregressive curve, and the bottom one the parameters used to generate it.}
+    \end{figure}
+
+    To lighten the notations, we will use the following notation for any variable $x$: $x_t$ instead of$x(t)$.
+
+\section{Simple regression}
+    \label{section:regression}
+    First, we start our approach by working on a part of the dataset for which the parameters are constant. The problem is reduced to a simple regression problem with $a, b, c$ as parameters. For the given time series, we know that this is the case for the interval [0, 49] that we will consider in this section.
+
+    In this section let $N=49$, $Y_k = (y_k, y_{k+1} \cdots y_{k+N-3})^T \quad k \in \{0,1,2,3\}$, let $Z=[Y_2, Y_1, Y_0]$ and $X=(a, b, c)^T$.
+    
+    The regression problem can therefore be formulated as follows:
+    $$ \min_{X}{\lVert Y_3 - ZX \rVert} $$
+
+    Considering the fact that, the noise in the dataset is Gaussian, the Euclidean norm is the most appropriate. The problem is equivalent to (i.e. not taking the square root of the norm, which a strictly increasing function):           
+     \begin{equation*}
+        \begin{aligned}
+            & \min_{a,b,c}{f} \\
+            \text{where} \quad &f(a,b,c) =  \sum_{i\in[0, N-3]}{(y_{i+3}  - a y_{i+2} - b  y_{i+1} - c y_i)^2}
+        \end{aligned}
+     \end{equation*}
+                
+    This first modeling was checked to ensure its efficiency and the results are displayed in figure \ref{fig:regression}. The identified parameters $(a, b, c) = (1.168, -0.988, 0.17)$ differs quiet significantly from the original parameters $(1, -0.8, -0.2)$. However, the identified parameters better reflect the samples than the original ones for that small set of noisy samples. This was confirmed by the calculation of squared error of each extrapolated curves compare to the original values: i.e. $f(a,b,c)$ ends up to $10.52$ for the regressed parameters and $11.08$ for the original ones.
+
+    \begin{figure}[h]
+        \centering
+        \includesvg[scale=0.75, pretex=\tiny]{images/regression.svg}
+        \caption{\label{fig:regression} The \emph{original} curve represents the original samples $y_{t+3}$. The two other curves display a $\tilde{y_t} = ay_{t+2} + by_{t+1}+cy_t$. They are based on the 3 preceding values of $y$ time series to extrapolate what should be the next value if there was no noise. The \emph{original\_parameters} curve takes the parameters that were used to generate the initial samples set, the \emph{regressed\_parameters} one takes the parameters resulting from the regression.}
+    \end{figure}
+    
+    This first analysis gives us confidence in the ability to identify the parameters of the autoregressive function: the regression optimization gives satisfactory results that enables to have good extrapolation features, but in the meantime, we see that we should not have high expectation on the precision on the parameters.
+
+\section{Modeling of the problem}
+    \subsection{Time detection as a cardinality problem}
+        The time detection algorithm's goal consists in detecting the time at which the parameters may have changed - considering this should not happen often. This can be formulated as a cardinality problem on the variation of the parameters. We limit the number of times the parameters could change.
+        In this subsection, we work on the full data set: $N = T-1 = 299$. The parameters now includes the time: $A=[a_0, \ldots a_{N-3}]$ as so forth for $B$ and $C$.
+        
+        To extend the previous regression lost function, we need to redefine :
+        \begin{equation*}
+            \begin{aligned}
+                X &= [A, B, C] \\
+                Z &= (diag(Y_2), diag(Y_1), diag(Y_0))\\
+                &= \begin{pmatrix} 
+                    y_2 & 0 & \ldots & 0 & y_1 & 0 & \ldots & 0 & y_0 & 0 & \ldots \\
+                    0 & y_3 & 0 & \ldots & 0 & y_2 & 0 & \ldots & 0 & y_1 & 0 & \ldots \\
+                    0 & 0 & \ddots & 0 & \ldots & 0 & \ddots & 0 & \ldots & 0 & \ddots & 0 & \\
+                    0 & \cdots & 0 & y_{N} & 0 & \ldots & 0 & y_{N-1} & 0 & \ldots & 0 & y_{N-2}
+                \end{pmatrix} \\
+                f (X) &= \lVert ZX - Y_3 \rVert^2_2
+            \end{aligned}
+        \end{equation*}
+
+        $Y_3$ remaining as defined in section \ref{section:regression}. 
+        
+        Let $D_A = (a_{i+1} - a_i)_{i \in \{0,\ldots 3*(N-4)\}}$, as well as $D_B$, and $D_C$. These vectors reflect the variation in the parameters that we intend to limit the number of.
+
+        Let $\mathcal{D} = \{0,1,\ldots 3*(N-4)\}\setminus\{N-4, 2*(N-4), 3*(N-4)\} $
+        so that $ D_X = (D_A, D_B, D_C) = (x_{i+1} - x_i)_{i \in \mathcal{D}} $ the vector that defines the variation of the parameters. 
+        
+        Thus, the cardinality problem to solve becomes:
+        \begin{equation*}
+            \begin{aligned}
+                \min_{X}&{\lVert ZX - Y_3 \rVert^2_2} \\
+                    s.t.    & \bm{Card}(D_X) \le M
+            \end{aligned}
+        \end{equation*}
+
+        $M$ being the maximum number of variations of the parameters.
+    
+    \subsection{Turn the formulation into a relaxed convex problem to solve it}
+        As formulated in the previous subsection, the problem is very difficult to solve. The cardinality constraint is not convex and prevents us to use all the convenient tooling. We will then approach the problem by relaxing the cardinality constraint by adding a parameters' variation absolute value term in the cost function. By doing so, the solver will reduce as much as possible the variations. As, unlike the square function, the  gradient of the absolute value does not tend to zero, the solver will be incentivized to drag the content down to zero.
+
+        The problem to solve becomes:
+        \begin{equation}
+            \label{eq:equation abs}
+                \min_{X}{\sum_{i\in[0, N-3]}{(y_{i+3}  - a_i y_{i+2} - b_i y_{i+1} - c_i y_i)^2} + \mu\sum_{i \in \mathcal{D}}{|x_{i+1} - x_i|}}
+        \end{equation}
+        
+        where $\mu$ is to be chosen to balance the cost function between the regression part and the limitation of the variations of the parameters. The higher $\mu$, the more the variation will be limited to the detriment of the quality of the regression.
+
+        Formulated as is, there is no reason for the result to end up to a perfect solution. However, based on the result, we could have an identification of the timestamp at which a higher change is required to the parameters. That is a time detection. Then in a second step, a regression problem can be achieved limiting the variables of the problem to the constant of the piecewise function knowing the time of their respective disruptions.
+
+\section{Solving with an off-the-shelf solver (\emph{Ipopt})}
+    \subsection{Modeling: dealing with the absolute value}
+    The chosen off-the-shelf solver is \emph{Ipopt} using \emph{pyomo} for the modeling. It is an interior point solver. It raises an error when submitting a model with an absolute value. We then add to use a known trick to transform an absolute value into a linear program.
+
+    To get $|x|$, we add a linear constraint including two new variables $x = t^+ - t^- \quad t1,t2 \in \mathbb{R}_+$ and then replacing $|x|$ in the objective function by $t^+ + t^-$. As the objective function is to be minimized, one of both will be set to its lower limit which is zero, and the other one will be equal to the absolute value.
+    
+    Thus, the formulation of the problem for \emph{Ipopt} becomes:
+    \begin{equation*}
+        \begin{aligned}
+            \min_{X}&{\lVert ZX - Y_3 \rVert^2_2 + \mu\sum_{i \in \mathcal{D}}{t^+_i + t^-_i}} \\
+            s.t. \quad &x_{i + 1} - x_{i} + t_i^+ - t_i^- = 0 \quad &\forall i \in \mathcal{D} \\
+            &t_i^+, t_i^- \in \mathbb{R}_+ &\forall i \in \mathcal{D}
+        \end{aligned}
+    \end{equation*}
+
+    \subsection{Results}
+    The results are shown on figure \ref{fig:ipopt_time_detection}. The identification of the parameters $a(t), b(t), c(t)$ are very similar to the one shown on figure \ref{fig:dataset} even if not perfect. However, if we consider that what was investigated with this algorithm is the time of the change, we can observe that the max deviation of each parameter exactly point to the time of the change in the original time series.
+
+    \begin{figure}[h]
+        \centering
+        \includesvg[scale=0.75, pretex=\tiny]{images/ipopt_time_detection.svg}
+        \caption{\label{fig:ipopt_time_detection} The first graphic shows the curve of the deviations of the parameters. It allows the detection of the times where there is a significant change in the parameters. The second chart presents the values of the parameters as they are identified by the regression, and the last one shows the extrapolated values with the identified \emph{moedeled} parameters compare to the initial time series.}
+    \end{figure}
+
+    In a second step, we took the information of the times of change and solved the regression problem including the time of change for each parameter. The results are shown in the figure \ref{fig:final regression}.
+    The mean of the difference between the extrapolated signals (regressed or original) are both very closed to the expected one (remember the noise is $\mathcal{N}(0, 0.5^2)$)
+
+    \begin{figure}[h]
+        \centering
+        \includesvg[scale=0.5, pretex=\tiny]{images/final_regression.svg}
+        \caption{\label{fig:final regression} The first column shows the result of the final regression for which the times of the change were given as constraint, the second column shows the original data. The first line shows the evolution of the parameters, the second, the evolution of the time series extrapolated with the corresponding parameters, and the original time series. The third line shows the difference between the two previous curves, and the last line shows the distribution of the identified noise.}
+    \end{figure}
+
+    \subsection{Performances}
+        We focus only on the time detection, which is the core of the project. The log of the solver state the number of variables is $2667$, the number of equality constraints is $888$.
+
+        The solver found an \emph{optimal solution} in $15$ iterations that took in total $0.034$ seconds.
+
+\section{Low complexity-algorithm implementation}
+    The problem raised by the absolute value was appealing. That was an opportunity to implement a sub-gradient method algorithm to deal with the \emph{non-differentiable} character of the absolute value function. The developed algorithm is based on equation \ref{eq:equation abs} which is a convex non-constrained optimization problem.
+
+\end{document}
