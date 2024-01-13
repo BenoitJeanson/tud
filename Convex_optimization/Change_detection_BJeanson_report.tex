@@ -12,6 +12,8 @@
 \usepackage{amsmath}
 \usepackage{amsfonts} 
 \usepackage{bm}
+\usepackage{listingsutf8}
+\usepackage{placeins}
 
 
 \svgpath{{images}}
@@ -81,9 +83,9 @@ Change Detection in Time Series Model}
 %--Paper--
 
 \section{Summary}
-    This project consists in applying optimization methods to detect the time of a change of parameters of an autoregressive time series problem. After a short reminder of the problem, a first warm-up approach is developed to get familiar with the problem, then a formulation as an optimization problem is proposed. It is then adapted to be solvable by an off-the-shelf solver and solved, and then a simple subgradient method is implemented to solve it directly from its initial formulation.
+    This project consists in applying optimization methods to detect the time of a change of parameters of an autoregressive time series. After a short reminder of the problem, a first warm-up approach is developed to get familiar with the problem, then a formulation as an optimization problem is proposed. It is then adapted to be solvable by an off-the-shelf solver and solved, and then a simple subgradient method is implemented to solve it directly from its initial formulation.
     
-    The project was developed in \emph{Python} -- as agreed with professor... TODO -- and run on a \emph{M1-chip MacBook Air}.
+    The project was developed in \emph{Python} -- as agreed with professor Geert Leus -- and run on a \emph{M1-chip MacBook Air}.
 
 \section{Problem to solve}
     A scalar autoregressive (AR) time series is modeled as follows:
@@ -100,7 +102,7 @@ Change Detection in Time Series Model}
         \caption{\label{fig:dataset} The top graphic represents the autoregressive curve, and the bottom one the parameters used to generate it.}
     \end{figure}
 
-    To lighten the notations, we will use the following notation for any variable $x$: $x_t$ instead of$x(t)$.
+    To lighten the notations, we will use the following notation for any variable $x$: $x_t$ instead of $x(t)$, and therefore any time series $x$ becomes naturally a vector.
 
 \section{Simple regression}
     \label{section:regression}
@@ -111,7 +113,7 @@ Change Detection in Time Series Model}
     The regression problem can therefore be formulated as follows:
     $$ \min_{X}{\lVert Y_3 - ZX \rVert} $$
 
-    Considering the fact that, the noise in the dataset is Gaussian, the Euclidean norm is the most appropriate. The problem is equivalent to (i.e. not taking the square root of the norm, which a strictly increasing function):           
+    Considering the fact that, the noise in the dataset is Gaussian, the Euclidean norm is the most appropriate. The problem is equivalent to (i.e. not taking the square root of the norm, which is a strictly increasing function):           
      \begin{equation*}
         \begin{aligned}
             & \min_{a,b,c}{f} \\
@@ -119,7 +121,7 @@ Change Detection in Time Series Model}
         \end{aligned}
      \end{equation*}
                 
-    This first modeling was checked to ensure its efficiency and the results are displayed in figure \ref{fig:regression}. The identified parameters $(a, b, c) = (1.168, -0.988, 0.17)$ differs quiet significantly from the original parameters $(1, -0.8, -0.2)$. However, the identified parameters better reflect the samples than the original ones for that small set of noisy samples. This was confirmed by the calculation of squared error of each extrapolated curves compare to the original values: i.e. $f(a,b,c)$ ends up to $10.52$ for the regressed parameters and $11.08$ for the original ones.
+    This first modeling was checked to ensure its efficiency and the results are displayed in figure \ref{fig:regression}. The identified parameters $(a, b, c) = (1.168, -0.988, 0.17)$ differs quite significantly from the original parameters $(1, -0.8, -0.2)$. However, the identified parameters better reflect the samples than the original ones for that small set of noisy samples. This was confirmed by the calculation of squared error of each extrapolated curves compare to the original values: i.e. $f(a,b,c)$ ends up to $10.52$ for the regressed parameters and $11.08$ for the original ones.
 
     \begin{figure}[h]
         \centering
@@ -131,8 +133,8 @@ Change Detection in Time Series Model}
 
 \section{Modeling of the problem}
     \subsection{Time detection as a cardinality problem}
-        The time detection algorithm's goal consists in detecting the time at which the parameters may have changed - considering this should not happen often. This can be formulated as a cardinality problem on the variation of the parameters. We limit the number of times the parameters could change.
-        In this subsection, we work on the full data set: $N = T-1 = 299$. The parameters now includes the time: $A=[a_0, \ldots a_{N-3}]$ as so forth for $B$ and $C$.
+        The time detection algorithm's goal consists in detecting the time at which the parameters may have changed - considering this should not happen often. This can be formulated as a cardinality problem on the variation of the parameters. We would define the maximum number of times the parameters could change.
+        In this subsection, we work on the full data set: $N = T-1 = 299$. The parameters now includes the time: $A=[a_0, \ldots a_{N-3}]$ and similarly for $B$ and $C$.
         
         To extend the previous regression lost function, we need to redefine :
         \begin{equation*}
@@ -181,9 +183,11 @@ Change Detection in Time Series Model}
 
 \section{Solving with an off-the-shelf solver (\emph{Ipopt})}
     \subsection{Modeling: dealing with the absolute value}
-    The chosen off-the-shelf solver is \emph{Ipopt} using \emph{pyomo} for the modeling. It is an interior point solver. It raises an error when submitting a model with an absolute value. We then add to use a known trick to transform an absolute value into a linear program.
+    The chosen off-the-shelf solver is \emph{Ipopt} using \emph{pyomo} for the modeling. It is an interior point solver.
+    
+    First, it raised an error when submitting a model with an absolute value. We then had to use a known trick to transform an absolute value into a linear program.
 
-    To get $|x|$, we add a linear constraint including two new variables $x = t^+ - t^- \quad t1,t2 \in \mathbb{R}_+$ and then replacing $|x|$ in the objective function by $t^+ + t^-$. As the objective function is to be minimized, one of both will be set to its lower limit which is zero, and the other one will be equal to the absolute value.
+    To get $|x|$, we add a linear constraint including two new variables $x = t^+ - t^- \quad t^+,t^- \in \mathbb{R}_+$ and then replacing $|x|$ in the objective function by $t^+ + t^-$. As the objective function is to be minimized, one of both will be set to its lower limit which is zero, and the other one will be equal to the absolute value.
     
     Thus, the formulation of the problem for \emph{Ipopt} becomes:
     \begin{equation*}
@@ -195,7 +199,7 @@ Change Detection in Time Series Model}
     \end{equation*}
 
     \subsection{Results}
-    The results are shown on figure \ref{fig:ipopt_time_detection}. The identification of the parameters $a(t), b(t), c(t)$ are very similar to the one shown on figure \ref{fig:dataset} even if not perfect. However, if we consider that what was investigated with this algorithm is the time of the change, we can observe that the max deviation of each parameter exactly point to the time of the change in the original time series.
+    The results are shown on figure \ref{fig:ipopt_time_detection}. After some trials, the parameter $mu=10$ gave the accurate results. The identification of the parameters $a(t), b(t), c(t)$ are very similar to the one shown on figure \ref{fig:dataset} even if not perfect. However, if we consider that what was investigated with this algorithm is the time of the change, we can observe that the max deviation of each parameter exactly point to the time of the change in the original time series.
 
     \begin{figure}[h]
         \centering
@@ -203,13 +207,12 @@ Change Detection in Time Series Model}
         \caption{\label{fig:ipopt_time_detection} The first graphic shows the curve of the deviations of the parameters. It allows the detection of the times where there is a significant change in the parameters. The second chart presents the values of the parameters as they are identified by the regression, and the last one shows the extrapolated values with the identified \emph{moedeled} parameters compare to the initial time series.}
     \end{figure}
 
-    In a second step, we took the information of the times of change and solved the regression problem including the time of change for each parameter. The results are shown in the figure \ref{fig:final regression}.
-    The mean of the difference between the extrapolated signals (regressed or original) are both very closed to the expected one (remember the noise is $\mathcal{N}(0, 0.5^2)$)
+    In a second step, we took the information of the times of change and solved the regression problem including the time of change for each parameter. The results are shown in the figure \ref{fig:final regression} where we can see that the mean of the difference between the extrapolated signals (regressed or original) are both very closed to the expected one (the noise is $\mathcal{N}(0, 0.5^2)$)
 
     \begin{figure}[h]
         \centering
         \includesvg[scale=0.5, pretex=\tiny]{images/final_regression.svg}
-        \caption{\label{fig:final regression} The first column shows the result of the final regression for which the times of the change were given as constraint, the second column shows the original data. The first line shows the evolution of the parameters, the second, the evolution of the time series extrapolated with the corresponding parameters, and the original time series. The third line shows the difference between the two previous curves, and the last line shows the distribution of the identified noise.}
+        \caption{\label{fig:final regression} Obtained with \emph{Ipopt}. The first column shows the result of the final regression for which the times of the change were given as constraint, the second column shows the original data. The first line shows the evolution of the parameters, the second, the evolution of the time series extrapolated with the corresponding parameters, and the original time series. The third line shows the difference between the two previous curves, and the last line shows the distribution of the identified noise.}
     \end{figure}
 
     \subsection{Performances}
@@ -217,7 +220,319 @@ Change Detection in Time Series Model}
 
         The solver found an \emph{optimal solution} in $15$ iterations that took in total $0.034$ seconds.
 
+    \FloatBarrier
+
 \section{Low complexity-algorithm implementation}
     The problem raised by the absolute value was appealing. That was an opportunity to implement a sub-gradient method algorithm to deal with the \emph{non-differentiable} character of the absolute value function. The developed algorithm is based on equation \ref{eq:equation abs} which is a convex non-constrained optimization problem.
+    
+    The code of the algorithm is given in appendix \ref{appendix: subgradient method}.
+
+    The implementation follows the method given during the lecture. A lot of degrees of freedom are given. Especially various options where possible to set up the step length $\alpha$ progression : constant step size, constant step length, square summable but no summable, nonsummable diminishing, nonsummable diminishing step lengths.
+    All were tested, for all of them the convergence was very slow.
+    
+    Finnally we ended up with square summable but not summable function $\alpha_k = a/(b + k)$ with $a = 1$ and $b = 200$. And the parameter $\mu=10$.
+
+    No less than $1000$ iterations -- performed in 1 second -- are needed to be able to get a clear identification of the index of the parameters change (see figure \ref{fig:subgradient1000}), but the parameters $a,b$ and $c$ are far from being identifiable as piecewise constant functions.
+
+    \begin{figure}[h]
+        \centering
+        \includesvg[scale=0.75, pretex=\tiny]{images/subgradient1000.svg}
+        \caption{\label{fig:subgradient1000} Obtained with the subgradient method in $1,000$ iterations. The first graphic shows the time series of the parameters $a,b,c$. And the second shows their variations along the samples. The time of the change of the parameters are clearly identifiable in the second graphic, even if the parameters $a,b$ and $c$ are still far from being identifiable as piecewise constant functions.}
+    \end{figure}
+
+    Figure \ref{fig:subgradient} shows the results after $100,000$ iteration in $145$ seconds. The time series of the parameters $a,b$ and $c$ are tending towards the expected shape. But it is at a cost of a lot of iterations, and the results with the \emph{Ipopt} were more accurate.
+
+    \begin{figure}[h]
+        \centering
+        \includesvg[scale=0.75, pretex=\tiny]{images/subgradient.svg}
+        \caption{\label{fig:subgradient} Obtained with the subgradient method in $100,000$ iterations. The first row shows the objective function over the iterations. The first one is the total result, and the two following show the squared error -- which correspond to the regression part -- and the cost of the deviation of the parameters. The beginning starts with a huge error (the subgradient method is not a descent method). The second row present first the time series of the parameters $a,b$ and $c$, their deviation, and the evolution of one difference between two value of $a$ against the iterations. The parameters time series are tending towards piecewise constant function.}
+    \end{figure}
+
+
+    \FloatBarrier
+
+    Some attempts to improve the convergence were unsuccessful on the non-differentiable term of the objective function (the absolution value). For example for a low value of $x_{i+1} - x_{i}$, giving a null value to the subgradient to try to stabilize the evolution of the objective function considering this is one possible subgradient. This did not help, but did not deteriorate. One strongest attempt was to force neighboring values of $x$ to be equal when their difference was low. This dramatically deteriorated the results. Indeed, this last approach has no strong mathematical support... but should be tested.
+
+    One other attempt was inspired by the interior point method, and consisted in approximating the absolute value with $log(cosh \lambda x)/\lambda$, which did not give substantial improvements, and introduced computation time.
+
+\section{Conclusion}
+This assignment was an opportunity to dig into the practical aspects of \emph{convex optimization} and to have a glimpse on that powerful approach to problem-solving. Looking at the project descriptions at the beginning of the course, it was puzzling as at first sight it was not an obvious optimization problem.
+
+The formulation as a cardinality problem was a call to approximating formulation to enter in to the field of convex optimization.
+
+The results given by \emph{Ipopt} demonstrates that the theory -- especially around the duality -- allows stunning efficiency. Only 15 iterations to reach optimality!
+
+Therefore, humility is the concluding feeling. Indeed, the implemented subgradient method -- which is a first order one -- enabled to identify the time of the change, but the final curves remained suboptimal and they were obtained at the cost of $100,000$ iterations.
+
+\pagebreak
+
+\appendix
+The appendixes take the key snippets corresponding to the assignment. The complete \emph{Jupyter notebook} is delivered with the present report.
+\section{Implementation with \emph{pyomo} and \emph{Ipopt}}
+
+    \subsection{Identification of the change detection}
+    \label{appendix: pyomo and Ipopt}
+        \begin{lstlisting}[language=Python]
+            def change_detection(cd_y, sample_size, mu):
+            '''
+            Build a pyomo.AbstractModel for the change detection of the parameters.
+            the model build stores the y time sereis in model.y, and the time series of the parameters a, b, and c in a 3 column time series model.w.
+            model.d_abs takes the t+ (index:1) and t- (index:2) values for the modeling of the absolute value of the variation of the parameters.
+            
+            Parameters
+                cd_y : the time series y(t)
+                sample_size : the size of the samples to be considered
+                mu: the parameter mu that gives a weight to the deviation cost.
+
+            Returns
+                model: the model once resolved
+                report: the report from the solver    
+            '''
+            model = pyo.AbstractModel()
+            model.data_index_set = pyo.RangeSet(0, sample_size - 1)
+            model.y = pyo.Param(model.data_index_set, initialize = lambda _, i: cd_y[i])
+
+            model.var_index_set = model.data_index_set - {sample_size - 1, sample_size - 2, sample_size - 3}
+            model.var_dim_set = pyo.RangeSet(0, 2)
+            
+            model.w = pyo.Var(model.var_dim_set, model.var_index_set)
+
+            model.var_d_set = model.var_index_set - {sample_size - 4}
+            model.d_abs = pyo.Var(model.var_dim_set, model.var_d_set, {1 , 2}, domain = pyo.NonNegativeReals)
+            
+            model.contr_d = pyo.Constraint(model.var_dim_set, model.var_d_set,
+                                        rule = lambda m, i, j: m.d_abs[i, j, 2] - m.d_abs[i, j, 1]  == m.w[i, j + 1] - m.w[i, j])
+
+            def rec_expr(m, i):
+                return  m.y[i + 3] \
+                        - m.w[0, i] * m.y[i + 2] \
+                        - m.w[1, i] * m.y[i + 1] \
+                        - m.w[2, i] * m.y[i]
+
+            def obj_expr(m) :
+                return sum(rec_expr(m, i)**2 for i in m.var_index_set) + mu * pyo.summation(m.d_abs)
+
+            model.obj = pyo.Objective(rule = obj_expr)
+
+            model.construct()
+
+            solver = pyo.SolverFactory("ipopt")
+            report = solver.solve(model, logfile = 'log.txt')
+            return model, report       
+        \end{lstlisting}
+
+    \subsection{Final regression}
+    \begin{lstlisting}[language=Python]
+        def identify_change_index(model):
+        '''
+        Identify the index at which the most probable change in the parameters are observed. For each of the 3 parameters a, b, c, the most probable change is the identified as the max deviation index.
+        
+        Parameter
+            model: the model generated by the change_detection function
+        
+        Return
+            a tuple with the 3 indexes corresponding to the 3 parameters.
+        '''
+        res = []
+        for dim in {0, 1, 2}:
+            list = [model.d_abs[dim, i, 2].value + model.d_abs[dim, i, 1].value for i in model.var_d_set]
+            res.append(list.index(max(list)))
+        return tuple(res)
+    
+    def final_regression(cd_y, sample_size: int, change_indexes: tuple[int, int, int]):
+        '''
+        Performs a regression to identify two values for each parameters a,b and c, considering each of them have one change at one respective index.
+        
+        Parameter
+            cd_y: the time series y(t)
+            sample_size: the size of the samples to be considered
+            change_indexes: a tuple with the 3 indexes corrsesponding to each of the 3 parameters. This could result from the function identify_change_index
+        
+        Returns
+            model: the pyomo model solved
+            report: the report from the solver
+        '''
+        model = pyo.AbstractModel()
+        model.data_index_set = pyo.RangeSet(0, sample_size - 1)
+        model.y = pyo.Param(model.data_index_set, initialize = lambda _, i: cd_y[i])
+    
+        model.var_index_set = model.data_index_set - {sample_size - 1, sample_size - 2, sample_size - 3}
+        model.var_dim_set = pyo.RangeSet(0, 2)
+        
+        model.w = pyo.Var(model.var_dim_set, {0, 1})
+    
+        def rec_expr(m, i):
+            return  m.y[i + 3] \
+                    - (m.w[0, 0] if i<=change_indexes[0] else m.w[0,1]) * m.y[i + 2] \
+                    - (m.w[1, 0] if i<=change_indexes[1] else m.w[1,1]) * m.y[i + 1] \
+                    - (m.w[2, 0] if i<=change_indexes[2] else m.w[2,1]) * m.y[i]
+    
+        def obj_expr(m) :
+            return sum(rec_expr(m, i)**2 for i in m.var_index_set)
+    
+        model.obj = pyo.Objective(rule = obj_expr)
+    
+        model.construct()
+    
+        solver = pyo.SolverFactory("ipopt")
+        report = solver.solve(model, logfile = 'log.txt')
+        return model, report
+    \end{lstlisting}
+    
+
+\section{Implementation of the subgradient method}
+\label{appendix: subgradient method}
+    \subsection{Subgradient function}
+        \begin{lstlisting}[language=Python]
+                def subgradient_method(fun_and_grad, x_0, alpha, min_k, max_k):
+            '''
+            The subgradient method implementation.
+            
+            Parameters
+                funa_and_grad: a function that takes a vector x as input, and returns the value of the function f(x), and a vector corresponding the the gradient df(x)
+                x_0: the starting point for x
+                alpha: a function that takes the iteration numbber, and the gradient, and returns the step size alpha
+                min_k: the minimum iteration at which the results are considered
+                max_k: the maximum number of iteration
+            
+            Returns
+                f_min: the minimum value reached for the objective function f
+                x_min: the value of x that corresponds to f_min
+                k_min: the iteration at which f-min was reached
+                f_k: a time series of the value of f against the iterations
+                log_time_series: time series of values given by fun_and_grad that are stored as log   
+            '''
+            f_x, _, _ = fun_and_grad(x_0)
+            f_k = [f_x]
+            f_min = f_x
+            k_min = 0
+            x = x_0
+            x_min = np.copy(x_0)
+            k = 0
+            log_time_series = []
+            while(k <= max_k):
+                f_x, d_f_x, log = fun_and_grad(x)
+                if f_x<f_min or k == min_k:
+                    f_min = f_x
+                    k_min = k
+                    x_min = np.copy(x)
+                log_time_series.append(log)
+                delta_x = np.multiply(d_f_x, -alpha(k, d_f_x))
+                x = np.add(x, delta_x)
+                f_k.append(f_x)
+                k += 1
+            return f_min, x_min, k_min, f_k, log_time_series
+        \end{lstlisting}
+
+    \subsection{Various implementations of the function \emph{alpha}}
+        \begin{lstlisting}[language=Python]
+            alpha_const = lambda alpha: (lambda k, df: alpha)
+            alpha_constant_step_length = lambda gamma: (lambda k, df: gamma/np.linalg.norm(df))
+            alpha_sq_summable = lambda a, b: (lambda k, df: a / (b+k))
+            alpha_nonsummable_diminishing = lambda a: lambda k,df : a/np.sqrt(k+1)
+            alpha_nonsummable_diminishing_step_length = lambda gamma : lambda k, df : gamma/np.linalg.norm(df)/np.sqrt(k+1)
+        \end{lstlisting}
+
+    
+    \subsection{The fun\_and\_grad function for the time detection}
+    The subgradient method is called as follows:
+        \begin{lstlisting}[language=Python]
+            fun_and_grad = lambda y, sample_size, mu: lambda x: objective_and_grad(y, x, sample_size, mu)
+            f_min, x_min, k_min, f_k, log = subgradient_method(fun_and_grad(cd_y, sample_size, mu), x0, alpha, min_k, max_k)
+        \end{lstlisting}
+    
+    With the implementations:
+
+    \begin{lstlisting}[language=Python]
+        def objective_and_grad(y, x, sample_size, mu):
+        '''
+        Returns the value of the objective function f(x) for the time detction and a vector corresponding to a subgradient df(x).
+        
+        Parameters
+            y: the time series y(t)
+            x: the value of the parameters a,b,c flattened into one single vector
+            sample_size the number of samples to be considered
+            mu: the weight given to the variation of the parameters in the objective function
+        
+        Returns
+            res: the value of f(x)
+            res_subgrads: a vector corresponding to the subgradients of f(x)
+            some log to monitor the [the values returned by sqr_error, and d_abs_error,  the value of x[11]-x[10]]
+        '''
+        res = 0
+        subgrads = []
+        err_sum, d_err_sum = 0,0
+        for i in range(sample_size - 4):
+            f_err, subgrads_err = sqr_error(y, x, sample_size, i)
+            f_d_error, subgrads_d_err = d_abs_error(x, sample_size, i, mu)
+            res += f_err + f_d_error
+            err_sum += f_err
+            d_err_sum += f_d_error
+            subgrads += subgrads_err
+            subgrads += subgrads_d_err
+        
+        i = sample_size - 4
+        f_err, subgrads_err = sqr_error(y, x, sample_size, i)
+        res += f_err
+        err_sum += f_err
+        subgrads += subgrads_err
+    
+        res_subgrads = np.zeros((sample_size - 3) * 3)
+        for sg in subgrads:
+            res_subgrads[sg[0]] += sg[1]
+        
+        return res, res_subgrads, [err_sum, d_err_sum, x[11] - x[10]]
+        
+        def sqr_error(y, x, sample_size, i):
+    '''
+    Calculates the squared error and gradient of the i^th index of the parameters a, b, and c of the autoregressive function with regards to the y time series.
+    
+    Parameters
+        y: the time series y(t)
+        x: the time series of the parameters a,b,c flattened into one single vector x
+        sample_size: the number of samples to be considered
+        i: the considered index
+    
+    Returns
+        the squared error
+        the contributions of the i^th index to the gradient as a list of tuples. Each tuple is shaped as (index in the vector x, value of the gradient)
+    '''
+    size = sample_size - 3
+    f = y[i + 3] \
+            - x[i] * y[i + 2]\
+            - x[size + i] * y[i + 1]\
+            - x[size * 2 + i] * y[i]
+    subgrads_f = [(i, -2 * y[i + 2] * f),
+                  (size + i, -2 * y[i + 1] * f),
+                  (size * 2 + i, -2 * y[i] * f)]
+    return f*f, subgrads_f
+
+    def d_abs_error(x, sample_size, i, mu):
+    '''
+    Calculates the absolute error and subgradient of the i^th index of the variation of the parameters a, b, and c.
+    
+    Parameters
+        x: the time series of the parameters a,b,c flattened into one single vector x
+        sample_size: the number of samples to be considered
+        i: the considered index
+        mu: the weight given to the variation of the parameters in the objective function
+    
+    Returns
+        the squared error
+        the contributions of the i^th index to the gradient as a list of tuples. Each tuple is shaped as (index in the vector x, value of the gradient)
+    '''
+    size = sample_size - 3
+    f = 0
+    subgrads_f = []
+    for k in range(3):
+        delta_x = x[k * size + i + 1] - x[k * size + i]
+        a = mu * (delta_x)
+        f += abs(a)
+        subgrads_f.append((k * size + i + 1, mu if a > 0 else -mu))
+        subgrads_f.append((k * size + i,    -mu if a > 0 else  mu))
+    return f, subgrads_f
+
+    \end{lstlisting}
+
 
 \end{document}
